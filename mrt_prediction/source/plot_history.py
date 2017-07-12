@@ -1,6 +1,6 @@
 import pandas as pd
 
-from source.utils.utils import plot_learning_curve
+from source import plot_learning_curve
 
 
 def main():

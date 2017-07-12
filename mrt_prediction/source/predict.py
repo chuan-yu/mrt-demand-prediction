@@ -1,33 +1,27 @@
 from datetime import datetime, timedelta
-
 from source.utils.utils import *
 
-
 def main():
-    raw_data_file_name = "data/45.csv"
-    neurons = 7
-    batch_size = 1
-    timestep = 1
-    features = 1
-    model_file = "checkpoints/45/weights.0.00143.hdf5"
+    data_file = "../data/120.csv"
+    time_steps = 16
+    model_file = "../checkpoints/120/(256-256-256-ts16).h5"
 
     # load scaled train and test data
-    train, test, scaler = get_scaled_train_test(raw_data_file_name)
+    raw_data = load_raw_data(data_file)
+    _, test_X, _, test_y = prepare_data(raw_data, time_steps, 0.3)
 
     if model_file:
         # build lstm model
-        #lstm_model = build_lstm_model_1_layer(neurons, batch_size, timestep, features)
-        lstm_model = build_lstm_model_2_layers(neurons, batch_size, timestep, features)
-        #lstm_model = build_lstm_model_3_layers(neurons, batch_size, timestep, features)
+        layers = [256, 256, 256]
+        input_shape = (test_X.shape[1], test_X.shape[2])
+        model = build_model(layers, input_shape)
+        model.summary()
 
         # load saved weights
-        lstm_model.load_weights(model_file)
-
-        # make predictions for all train data to build up lstm states
-        lstm_model = build_up_state(lstm_model, train, batch_size=1)
+        model.load_weights(model_file)
 
         # make predictions for test data
-        predictions, expectations = predict_lstm(lstm_model, 1, test)
+        predictions = model.predict(test_X)
 
         d1 = datetime(2016, 3, 22, 16)
         d2 = datetime(2016, 4, 1, 0)
@@ -35,20 +29,19 @@ def main():
         hours = delta.days * 24 + int(delta.seconds / 3600)
         datetime_list = [d1 + timedelta(hours=i) for i in range(hours)]
 
+        predictions = predictions.reshape(predictions.shape[0])
         predictions = pd.Series(predictions)
         predictions.index = datetime_list
-        expectations = pd.Series(expectations)
+        test_y = test_y.reshape(test_y.shape[0])
+        expectations = pd.Series(test_y)
         expectations.index = datetime_list
-
-        # predictions = scaler.inverse_transform(predictions)
-        # expectations = scaler.inverse_transform(expectations)
-
-        # plot predictions and expectations
-        plot_comparison(expectations, predictions)
 
         # report error
         rmse = get_rmse(expectations.values, predictions.values)
         print('Test RMSE: %.3F' % rmse)
+
+        # plot predictions and expectations
+        plot_comparison(expectations, predictions)
 
     else:
         raise ValueError('empty model file name')

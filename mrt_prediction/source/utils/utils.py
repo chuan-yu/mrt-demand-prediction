@@ -8,134 +8,122 @@ from keras.layers import Dense
 from keras.layers import LSTM
 from keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint
+from keras.callbacks import TensorBoard
 from math import sqrt
 
 
+# load data from csv file
 def load_raw_data(filename):
-    raw_data = pd.read_csv(filename, header=None, index_col=0, squeeze=True)
+    raw_data = pd.read_csv(filename, header=None, index_col=0)
     return raw_data
 
 
-# convert a timeseries to supervised leanring data
-def timeseries_to_supervised(series):
-    shifted_series = series.shift(-1)
-    df = pd.concat([series, shifted_series], axis=1)
-    df.fillna(0, inplace=True)
-    return df
+# generate sine wave
+def generate_sine_data():
+    x = np.linspace(0, 100, 1000)
+    sine = np.sin(x)
+    sine = sine.reshape(x.shape[0], 1)
+    return sine
 
 
-# scale data to (0, 1) range
+# Scale data to (0, 1) range
 def scale(data):
-    scaler = MinMaxScaler(feature_range=(-1, 1))
+    scaler = MinMaxScaler(feature_range=(0, 1))
     scaled_data = scaler.fit_transform(data)
     return scaler, scaled_data
 
 
-def get_scaled_train_test(filename, train_ratio=0.7):
-    raw_data = load_raw_data(filename)
-    supervised = timeseries_to_supervised(raw_data)
-    supervised_value = supervised.values
-    scaler, scaled_supervised_values = scale(supervised_value)
-
-    train_no = int(scaled_supervised_values.shape[0] * train_ratio)
-    train = scaled_supervised_values[0:train_no]
-    test = scaled_supervised_values[train_no:]
-
-    return train, test, scaler
+# Split the time series data to train and test data
+def split_data(data, time_steps, test_ratio=0.3):
+    n_train = int(len(data) * (1 - test_ratio))
+    train = data[0:n_train]
+    test = data[n_train:]
+    test = np.vstack((train[-time_steps:], test))
+    return train, test
 
 
-# invert data to its original scale
-def invert_scale(scaler, X, y):
-    value_pair = [X] + [y]
-    array = np.array(value_pair)
-    array = array.reshape(1, len(array))
-    inverted = scaler.inverse_transform(array)
-    return inverted[0, -1]
+# Generate time window inputs and labels
+# Example:
+#   input: [1 2 3 4 5 6 7], time_steps = 3
+#   output: if not label: [[1 2 3], [2 3 4], [3 4 5], [4 5 6]]
+#           if label: [[4], [5], [6], [7]]
+def generate_rnn_data(data, time_steps, labels=False):
+    rnn_data = []
+    if labels:
+        for i in range(len(data) - time_steps):
+            rnn_data.append(data[i + time_steps])
+    else:
+        for i in range(len(data) - time_steps):
+            rnn_data.append(data[i:i + time_steps])
+
+    rnn_data = np.array(rnn_data)
+    return rnn_data
 
 
-def build_lstm_model_1_layer(neurons, batch_size, timestep, features):
+# Generate data ready for RNN training and testing
+def prepare_data(raw_data, time_steps, test_ratio):
+    _, raw_data = scale(raw_data)
+    train, test = split_data(raw_data, time_steps, test_ratio=test_ratio)
+    train_X = generate_rnn_data(train, time_steps, labels=False)
+    test_X = generate_rnn_data(test, time_steps, labels=False)
+    train_y = generate_rnn_data(train, time_steps, labels=True)
+    test_y = generate_rnn_data(test, time_steps, labels=True)
+    return train_X, test_X, train_y, test_y
+
+
+def build_model(layers, input_shape, dropout=0):
     model = Sequential()
-    model.add(LSTM(neurons,
-                   batch_input_shape=(batch_size, timestep, features),
-                   stateful=True, return_sequences=False))
+
+    for i, layer in enumerate(layers):
+        return_sequence = True if i < len(layers) - 1 else False
+        if i == 0:
+            model.add(LSTM(layer, input_shape=input_shape, dropout=dropout,
+                           return_sequences=return_sequence))
+            # model.add(LSTM(layer, batch_input_shape=input_shape, dropout=dropout,
+            #                return_sequences=return_sequence,
+            #                stateful=True))
+        else:
+            model.add(LSTM(layer, dropout=dropout, return_sequences=return_sequence))
+
     model.add(Dense(1))
     model.compile(loss='mean_squared_error', optimizer='adam')
 
     return model
 
 
-def build_lstm_model_2_layers(neurons, batch_size, timestep, features):
-    model = Sequential()
-    model.add(LSTM(neurons,
-                   batch_input_shape=(batch_size, timestep, features),
-                   stateful=True, return_sequences=True))
-    model.add(LSTM(neurons, return_sequences=False, stateful=True))
-    model.add(Dense(1))
-    optimizer = Adam(lr=0.001)
-    model.compile(loss='mean_squared_error', optimizer="adam")
-    return model
+def fit_model(model, train, test, batch_size, epochs, checkpoint_dir, tb_dir):
+    train_X, train_y, test_X, test_y = train[0], train[1], test[0], test[1]
 
+    call_back_list = None
 
-def build_lstm_model_3_layers(neurons, batch_size, timestep, features):
-    model = Sequential()
-    model.add(LSTM(neurons,
-                   batch_input_shape=(batch_size, timestep, features),
-                   stateful=True, return_sequences=True))
-    model.add(LSTM(neurons, return_sequences=True, stateful=True))
-    model.add(LSTM(neurons, return_sequences=False, stateful=True))
-    model.add(Dense(1))
+    tb_call_back = None
+    if tb_dir:
+        tb_call_back = TensorBoard(log_dir=tb_dir, histogram_freq=2, write_graph=False)
 
-    model.compile(loss='mean_squared_error', optimizer='adam')
-    return model
-
-
-def fit_lstm(model, train, test, batch_size, timesteps,
-             nb_epoch, checkpoint_folder=None,
-             validation=False, checkpoints=False):
-    # prepare data
-    X, y = train[:, 0:-1], train[:, -1]
-    X_test, y_test = test[:, 0:-1], test[:, -1]
-    X = X.reshape(X.shape[0], timesteps, X.shape[1])
-    X_test = X_test.reshape(X_test.shape[0], timesteps, X_test.shape[1])
-
-    print(X.shape)
-    # add checkpoint
-    callback_list = None
-    if checkpoints:
-        filepath = checkpoint_folder + "weights.{loss:.5f}.hdf5"
-        if validation:
-            filepath = checkpoint_folder + "weights.{val_loss:.5f}.hdf5"
-
-        monitor = 'loss'
-        if validation:
-            monitor = 'val_loss'
-        checkpoint = ModelCheckpoint(filepath, monitor=monitor, verbose=1,
+    checkpoint = None
+    if checkpoint_dir:
+        checkpoint_file = checkpoint_dir + 'models.h5'
+        checkpoint = ModelCheckpoint(checkpoint_file, monitor='val_loss', verbose=1,
                                      save_best_only=True, mode="min")
-        callback_list = [checkpoint]
 
-    # set validation data
-    validation_data = None
-    if validation:
-        validation_data = (X_test, y_test)
+    if tb_call_back or checkpoint:
+        call_back_list = []
 
-    # fit
+        if tb_call_back:
+            call_back_list.append(tb_call_back)
 
-    val_loss = []
-    loss = []
-    for i in range(nb_epoch):
-        print("epoch %s/%s" % (str(i), str(nb_epoch)))
-        history = model.fit(X, y,
-                            epochs=1, batch_size=batch_size,
-                            verbose=0, shuffle=False,
-                            callbacks=callback_list,
-                            validation_data=validation_data)
-        val_loss.append(history.history['val_loss'][0])
-        loss.append(history.history['loss'][0])
-        model.reset_states()
+        if checkpoint:
+            call_back_list.append(checkpoint)
 
-    histories = {"val_loss": val_loss, "loss": loss}
 
-    return histories
+    history = model.fit(train_X, train_y, epochs=epochs,
+                        batch_size=batch_size, verbose=1,
+                        validation_data=(test_X, test_y),
+                        callbacks=call_back_list)
+
+    history = {'val_loss': history.history['val_loss'],
+               'loss': history.history['loss']}
+    return history
 
 
 def build_up_state(model, train, batch_size):

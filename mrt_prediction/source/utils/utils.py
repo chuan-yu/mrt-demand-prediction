@@ -14,7 +14,7 @@ from math import sqrt
 
 # load data from csv file
 def load_raw_data(filename):
-    raw_data = pd.read_csv(filename, header=None, index_col=0)
+    raw_data = pd.read_csv(filename, index_col=0, header=None)
     return raw_data
 
 
@@ -29,8 +29,8 @@ def generate_sine_data():
 # Scale data to (0, 1) range
 def scale(data):
     scaler = MinMaxScaler(feature_range=(0, 1))
-    scaled_data = scaler.fit_transform(data)
-    return scaler, scaled_data
+    data.iloc[:, 0] = scaler.fit_transform(data.iloc[:, 0])
+    return scaler, data
 
 
 # Split the time series data to train and test data
@@ -51,7 +51,7 @@ def generate_rnn_data(data, time_steps, labels=False):
     rnn_data = []
     if labels:
         for i in range(len(data) - time_steps):
-            rnn_data.append(data[i + time_steps])
+            rnn_data.append(data[i + time_steps, 0])
     else:
         for i in range(len(data) - time_steps):
             rnn_data.append(data[i:i + time_steps])
@@ -63,7 +63,7 @@ def generate_rnn_data(data, time_steps, labels=False):
 # Generate data ready for RNN training and testing
 def prepare_data(raw_data, time_steps, test_ratio):
     _, raw_data = scale(raw_data)
-    train, test = split_data(raw_data, time_steps, test_ratio=test_ratio)
+    train, test = split_data(raw_data.values, time_steps, test_ratio=test_ratio)
     train_X = generate_rnn_data(train, time_steps, labels=False)
     test_X = generate_rnn_data(test, time_steps, labels=False)
     train_y = generate_rnn_data(train, time_steps, labels=True)
@@ -79,9 +79,6 @@ def build_model(layers, input_shape, dropout=0):
         if i == 0:
             model.add(LSTM(layer, input_shape=input_shape, dropout=dropout,
                            return_sequences=return_sequence))
-            # model.add(LSTM(layer, batch_input_shape=input_shape, dropout=dropout,
-            #                return_sequences=return_sequence,
-            #                stateful=True))
         else:
             model.add(LSTM(layer, dropout=dropout, return_sequences=return_sequence))
 
@@ -95,7 +92,6 @@ def fit_model(model, train, test, batch_size, epochs, checkpoint_dir, tb_dir):
     train_X, train_y, test_X, test_y = train[0], train[1], test[0], test[1]
 
     call_back_list = None
-
     tb_call_back = None
     if tb_dir:
         tb_call_back = TensorBoard(log_dir=tb_dir, histogram_freq=2, write_graph=False)

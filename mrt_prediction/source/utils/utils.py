@@ -73,7 +73,7 @@ def prepare_data(raw_data, time_steps, test_ratio):
     return train_X, test_X, train_y, test_y
 
 
-def build_model(layers, input_shape, l2_coef, dropout=0):
+def build_model(layers, input_shape, lr, l2_coef, dropout=0):
     model = Sequential()
     regularizer = l2(l2_coef)
     for i, layer in enumerate(layers):
@@ -86,10 +86,12 @@ def build_model(layers, input_shape, l2_coef, dropout=0):
             model.add(LSTM(layer, dropout=dropout,
                            return_sequences=return_sequence,
                            kernel_regularizer=regularizer))
-        model.add(BatchNormalization())
+        if i < len(layers) - 1:
+            model.add(BatchNormalization())
 
     model.add(Dense(1))
-    model.compile(loss='mean_squared_error', optimizer='adam')
+    optimizer = Adam(lr=lr)
+    model.compile(loss='mean_squared_error', optimizer=optimizer)
 
     return model
 
@@ -100,7 +102,7 @@ def fit_model(model, train, test, batch_size, epochs, checkpoint_dir, tb_dir):
     call_back_list = None
     tb_call_back = None
     if tb_dir:
-        tb_call_back = TensorBoard(log_dir=tb_dir, histogram_freq=2, write_graph=False)
+        tb_call_back = TensorBoard(log_dir=tb_dir, histogram_freq=0, write_graph=False)
 
     checkpoint = None
     if checkpoint_dir:

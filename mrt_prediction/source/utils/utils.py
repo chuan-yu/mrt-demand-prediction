@@ -7,6 +7,7 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import LSTM
 from keras.regularizers import l2
+from keras.layers import BatchNormalization
 from keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint
 from keras.callbacks import TensorBoard
@@ -72,26 +73,27 @@ def prepare_data(raw_data, time_steps, test_ratio):
     return train_X, test_X, train_y, test_y
 
 
-def build_model(layers, input_shape, l2_coef, dropout=0):
+def build_model(layers, input_shape, lr, l2_coef, dropout=0, batch_normalization=False):
     model = Sequential()
-
     regularizer = l2(l2_coef)
+
     for i, layer in enumerate(layers):
         return_sequence = True if i < len(layers) - 1 else False
         if i == 0:
             model.add(LSTM(layer, input_shape=input_shape, dropout=dropout,
                            return_sequences=return_sequence,
                            kernel_regularizer=regularizer))
-            # model.add(LSTM(layer, batch_input_shape=input_shape, dropout=dropout,
-            #                return_sequences=return_sequence,
-            #                stateful=True))
         else:
             model.add(LSTM(layer, dropout=dropout,
                            return_sequences=return_sequence,
                            kernel_regularizer=regularizer))
+        if batch_normalization:
+            if i < len(layers) - 1:
+                model.add(BatchNormalization())
 
     model.add(Dense(1))
-    model.compile(loss='mean_squared_error', optimizer='adam')
+    optimizer = Adam(lr=lr)
+    model.compile(loss='mean_squared_error', optimizer=optimizer)
 
     return model
 

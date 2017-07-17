@@ -2,16 +2,17 @@ from source.utils.utils import *
 
 
 def main():
-    data_file = "./data/120.csv"
+    data_file = "./data/45.csv"
     checkpoint_folder = "./checkpoints/models/"
-    tensorboard_folder = "./tf_checkpoints/120-(10, 10, 10)-ts168-l20.001/"
+    tensorboard_folder = "./tf_checkpoints/45-(16, 32, 64)-ts16/"
     history_file = "./histories/history.csv"
-    batch_size = 352
+    layers = [16, 32, 64]
+    batch_size = 252
     lr = 0.001
-    l2_coef = 0.000000001
+    l2_coef = 0
     dropout = 0
     epochs = 1000
-    time_steps = 168
+    time_steps = 16
     model_file = ""
 
     # load scaled train and test data
@@ -22,7 +23,6 @@ def main():
     # build lstm model
     input_shape = (train_X.shape[1], train_X.shape[2])
     # batch_input_shape = (batch_size, train_X.shape[1], train_X.shape[2])
-    layers = [10, 10, 10]
     model = build_model(layers, input_shape, lr, l2_coef, dropout, batch_normalization=False)
     model.summary()
 

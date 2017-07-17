@@ -4,14 +4,14 @@ from source.utils.utils import *
 def main():
     data_file = "./data/120.csv"
     checkpoint_folder = "./checkpoints/models/"
-    tensorboard_folder = "./tf_checkpoints/120-(32, 64, 128)-ts1/"
+    tensorboard_folder = "./tf_checkpoints/120-(10, 10, 10)-ts168-l20.001/"
     history_file = "./histories/history.csv"
-    batch_size = 500
+    batch_size = 352
     lr = 0.001
-    l2_coef = 0
+    l2_coef = 0.000000001
     dropout = 0
     epochs = 1000
-    time_steps = 1
+    time_steps = 168
     model_file = ""
 
     # load scaled train and test data
@@ -22,8 +22,8 @@ def main():
     # build lstm model
     input_shape = (train_X.shape[1], train_X.shape[2])
     # batch_input_shape = (batch_size, train_X.shape[1], train_X.shape[2])
-    layers = [32, 64, 128]
-    model = build_model(layers, input_shape, lr, l2_coef, dropout)
+    layers = [10, 10, 10]
+    model = build_model(layers, input_shape, lr, l2_coef, dropout, batch_normalization=False)
     model.summary()
 
     # initialize the model with saved weights

@@ -2,14 +2,14 @@ from source.utils.utils import *
 
 
 def main():
-    data_file = "./data/120_time.csv"
+    data_file = "./data/45_day.csv"
     checkpoint_folder = "./checkpoints/models/"
-    tensorboard_folder = "./tf_checkpoints/120-MF-(64, 64, 64)-ts16-BN-l20.001-lr0.01/"
+    tensorboard_folder = "./tf_checkpoints/45-day-(64, 128, 256)-ts16"
     history_file = "./histories/history.csv"
-    layers = [64, 64, 64]
-    batch_size = 200
+    layers = [64, 128, 256]
+    batch_size = 252
     lr = 0.001
-    l2_coef = 0.001
+    l2_coef = 0
     dropout = 0
     epochs = 1000
     time_steps = 16
@@ -21,7 +21,7 @@ def main():
 
     # build lstm model
     input_shape = (train_X.shape[1], train_X.shape[2])
-    model = build_model(layers, input_shape, lr, l2_coef, dropout)
+    model = build_model(layers, input_shape, lr, l2_coef, dropout, batch_normalization=False)
     model.summary()
 
     # initialize the model with saved weights

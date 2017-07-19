@@ -31,7 +31,8 @@ def generate_sine_data():
 # Scale data to (0, 1) range
 def scale(data):
     scaler = MinMaxScaler(feature_range=(0, 1))
-    data.iloc[:, 0] = scaler.fit_transform(data.iloc[:, 0])
+    # data.iloc[:, 0] = scaler.fit_transform(data.iloc[:, 0])
+    data = scaler.fit_transform(data)
     return scaler, data
 
 
@@ -65,7 +66,7 @@ def generate_rnn_data(data, time_steps, labels=False):
 # Generate data ready for RNN training and testing
 def prepare_data(raw_data, time_steps, test_ratio):
     _, raw_data = scale(raw_data)
-    train, test = split_data(raw_data.values, time_steps, test_ratio=test_ratio)
+    train, test = split_data(raw_data, time_steps, test_ratio=test_ratio)
     train_X = generate_rnn_data(train, time_steps, labels=False)
     test_X = generate_rnn_data(test, time_steps, labels=False)
     train_y = generate_rnn_data(train, time_steps, labels=True)
@@ -73,7 +74,7 @@ def prepare_data(raw_data, time_steps, test_ratio):
     return train_X, test_X, train_y, test_y
 
 
-def build_model(layers, input_shape, lr, l2_coef, dropout=0):
+def build_model(layers, input_shape, lr, l2_coef, dropout=0, batch_normalization=False):
     model = Sequential()
     regularizer = l2(l2_coef)
     for i, layer in enumerate(layers):
@@ -86,8 +87,9 @@ def build_model(layers, input_shape, lr, l2_coef, dropout=0):
             model.add(LSTM(layer, dropout=dropout,
                            return_sequences=return_sequence,
                            kernel_regularizer=regularizer))
-        if i < len(layers) - 1:
-            model.add(BatchNormalization())
+        if batch_normalization:
+            if i < len(layers) - 1:
+                model.add(BatchNormalization())
 
     model.add(Dense(1))
     optimizer = Adam(lr=lr)

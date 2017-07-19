@@ -2,9 +2,12 @@ from datetime import datetime, timedelta
 from source.utils.utils import *
 
 def main():
-    data_file = "../data/120.csv"
+    lr = 0.001
+    l2_coef = 0
+    dropout = 0
+    data_file = "../data/45.csv"
     time_steps = 16
-    model_file = "../checkpoints/120/(256-256-256-ts16).h5"
+    model_file = "../checkpoints/models/models.h5"
 
     # load scaled train and test data
     raw_data = load_raw_data(data_file)
@@ -12,9 +15,9 @@ def main():
 
     if model_file:
         # build lstm model
-        layers = [256, 256, 256]
+        layers = [128, 256, 512]
         input_shape = (test_X.shape[1], test_X.shape[2])
-        model = build_model(layers, input_shape)
+        model = build_model(layers, input_shape, lr, l2_coef, dropout, batch_normalization=False)
         model.summary()
 
         # load saved weights

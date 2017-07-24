@@ -2,19 +2,24 @@ from datetime import datetime, timedelta
 from source.utils.utils import *
 
 def main():
-    data_file = "../data/120.csv"
+    lr = 0.001
+    l2_coef = 0
+    dropout = 0
+    station_name = 16
+    data_file = "../data/hour/%s.csv" % station_name
     time_steps = 16
-    model_file = "../checkpoints/120/(256-256-256-ts16).h5"
+    model_file = "../checkpoints/hour/raw/%s.h5" % station_name
 
     # load scaled train and test data
     raw_data = load_raw_data(data_file)
-    _, test_X, _, test_y = prepare_data(raw_data, time_steps, 0.3)
+
+    _, test_X, _, test_y, test_index = prepare_data(raw_data, time_steps, 0.3)
 
     if model_file:
         # build lstm model
-        layers = [256, 256, 256]
+        layers = [128, 256, 512]
         input_shape = (test_X.shape[1], test_X.shape[2])
-        model = build_model(layers, input_shape)
+        model = build_model(layers, input_shape, lr, l2_coef, dropout, batch_normalization=False)
         model.summary()
 
         # load saved weights
@@ -22,26 +27,19 @@ def main():
 
         # make predictions for test data
         predictions = model.predict(test_X)
-
-        d1 = datetime(2016, 3, 22, 16)
-        d2 = datetime(2016, 4, 1, 0)
-        delta = d2 - d1
-        hours = delta.days * 24 + int(delta.seconds / 3600)
-        datetime_list = [d1 + timedelta(hours=i) for i in range(hours)]
-
         predictions = predictions.reshape(predictions.shape[0])
-        predictions = pd.Series(predictions)
-        predictions.index = datetime_list
+        predictions = pd.Series(predictions, index=test_index)
+
         test_y = test_y.reshape(test_y.shape[0])
-        expectations = pd.Series(test_y)
-        expectations.index = datetime_list
+        expectations = pd.Series(test_y, index=test_index)
 
         # report error
         rmse = get_rmse(expectations.values, predictions.values)
         print('Test RMSE: %.3F' % rmse)
 
         # plot predictions and expectations
-        plot_comparison(expectations, predictions)
+        _, scaled_raw_data = scale(raw_data[raw_data.columns[0]])
+        plot_comparison(scaled_raw_data, predictions, station_name)
 
     else:
         raise ValueError('empty model file name')

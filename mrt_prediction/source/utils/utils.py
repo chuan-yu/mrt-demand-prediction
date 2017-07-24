@@ -6,8 +6,8 @@ from sklearn.metrics import mean_squared_error
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import LSTM
-from keras.regularizers import l2
 from keras.layers import BatchNormalization
+from keras.regularizers import l2
 from keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint
 from keras.callbacks import TensorBoard
@@ -16,7 +16,8 @@ from math import sqrt
 
 # load data from csv file
 def load_raw_data(filename):
-    raw_data = pd.read_csv(filename, header=None, index_col=0)
+    raw_data = pd.read_csv(filename, index_col=0, header=None)
+    raw_data.index = pd.to_datetime(raw_data.index)
     return raw_data
 
 
@@ -30,9 +31,11 @@ def generate_sine_data():
 
 # Scale data to (0, 1) range
 def scale(data):
+    index = data.index
     scaler = MinMaxScaler(feature_range=(0, 1))
-    scaled_data = scaler.fit_transform(data)
-    return scaler, scaled_data
+    data = scaler.fit_transform(data)
+    data = pd.DataFrame(data, index=index)
+    return scaler, data
 
 
 # Split the time series data to train and test data
@@ -40,8 +43,10 @@ def split_data(data, time_steps, test_ratio=0.3):
     n_train = int(len(data) * (1 - test_ratio))
     train = data[0:n_train]
     test = data[n_train:]
+    test_index = test.index
+    train = np.array(train)
     test = np.vstack((train[-time_steps:], test))
-    return train, test
+    return train, test, test_index
 
 
 # Generate time window inputs and labels
@@ -53,7 +58,7 @@ def generate_rnn_data(data, time_steps, labels=False):
     rnn_data = []
     if labels:
         for i in range(len(data) - time_steps):
-            rnn_data.append(data[i + time_steps])
+            rnn_data.append(data[i + time_steps, 0])
     else:
         for i in range(len(data) - time_steps):
             rnn_data.append(data[i:i + time_steps])
@@ -65,18 +70,17 @@ def generate_rnn_data(data, time_steps, labels=False):
 # Generate data ready for RNN training and testing
 def prepare_data(raw_data, time_steps, test_ratio):
     _, raw_data = scale(raw_data)
-    train, test = split_data(raw_data, time_steps, test_ratio=test_ratio)
+    train, test, test_index = split_data(raw_data, time_steps, test_ratio=test_ratio)
     train_X = generate_rnn_data(train, time_steps, labels=False)
     test_X = generate_rnn_data(test, time_steps, labels=False)
     train_y = generate_rnn_data(train, time_steps, labels=True)
     test_y = generate_rnn_data(test, time_steps, labels=True)
-    return train_X, test_X, train_y, test_y
+    return train_X, test_X, train_y, test_y, test_index
 
 
 def build_model(layers, input_shape, lr, l2_coef, dropout=0, batch_normalization=False):
     model = Sequential()
     regularizer = l2(l2_coef)
-
     for i, layer in enumerate(layers):
         return_sequence = True if i < len(layers) - 1 else False
         if i == 0:
@@ -98,19 +102,18 @@ def build_model(layers, input_shape, lr, l2_coef, dropout=0, batch_normalization
     return model
 
 
-def fit_model(model, train, test, batch_size, epochs, checkpoint_dir, tb_dir):
+def fit_model(model, train, test, batch_size, epochs, checkpoint_dir, checkpoint_name, tb_dir=None, verbose=1):
     train_X, train_y, test_X, test_y = train[0], train[1], test[0], test[1]
 
     call_back_list = None
-
     tb_call_back = None
     if tb_dir:
-        tb_call_back = TensorBoard(log_dir=tb_dir, histogram_freq=2, write_graph=False)
+        tb_call_back = TensorBoard(log_dir=tb_dir, histogram_freq=0, write_graph=False)
 
     checkpoint = None
     if checkpoint_dir:
-        checkpoint_file = checkpoint_dir + 'models.h5'
-        checkpoint = ModelCheckpoint(checkpoint_file, monitor='val_loss', verbose=1,
+        checkpoint_file = checkpoint_dir + checkpoint_name
+        checkpoint = ModelCheckpoint(checkpoint_file, monitor='val_loss', verbose=verbose,
                                      save_best_only=True, mode="min")
 
     if tb_call_back or checkpoint:
@@ -124,7 +127,7 @@ def fit_model(model, train, test, batch_size, epochs, checkpoint_dir, tb_dir):
 
 
     history = model.fit(train_X, train_y, epochs=epochs,
-                        batch_size=batch_size, verbose=1,
+                        batch_size=batch_size, verbose=verbose,
                         validation_data=(test_X, test_y),
                         callbacks=call_back_list)
 
@@ -151,10 +154,10 @@ def plot_learning_curve(history):
     plt.show()
 
 
-def plot_comparison(expectations, predictions):
+def plot_comparison(expectations, predictions, station_name):
     plt.plot(expectations, color='blue')
     plt.plot(predictions, color='orange')
-    plt.title("expectations vs. predictions")
+    plt.title(station_name)
     plt.ylabel('Scaled_Demand')
     plt.xlabel('Timestep')
     plt.legend(['expectations', 'predictions'], loc='upper right')

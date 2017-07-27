@@ -1,4 +1,5 @@
 from utils.utils import *
+import tensorflow as tf
 
 
 def main():
@@ -8,6 +9,8 @@ def main():
     tensorboard_folder = None #"../tf_checkpoints/45-(32, 32, 32)-ts16-2"
     history_file = "../histories/history.csv"
     layers = [32, 32, 32]
+    num_layers = 3
+    state_size = 4
     batch_size = 1200
     lr = 0.001
     l2_coef = 0
@@ -19,7 +22,8 @@ def main():
 
     # load scaled train and test data
     raw_data = load_raw_data(data_file)
-    train_X, test_X, train_y, test_y, _, _ = prepare_data(raw_data, time_steps, 0.3)
+    train_X, test_X, train_y, test_y, _ = prepare_data(raw_data, time_steps, 0.3)
+
 
     # build lstm model
     input_shape = (train_X.shape[1], train_X.shape[2])

@@ -136,11 +136,6 @@ def fit_model(model, train, test, batch_size, epochs, checkpoint_dir, checkpoint
     return history
 
 
-def build_up_state(model, train, batch_size):
-    train_reshaped = train[:, 0].reshape(len(train), 1, 1)
-    model.predict(train_reshaped, batch_size)
-    return model
-
 
 def plot_learning_curve(history):
     plt.close()

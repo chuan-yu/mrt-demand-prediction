@@ -1,11 +1,13 @@
-from datetime import datetime, timedelta
-from source.utils.utils import *
+from utils.data_processing import *
+from utils.keras_model import *
+from utils.figures import *
+
 
 def main():
     lr = 0.001
     l2_coef = 0
     dropout = 0
-    station_name = 16
+    station_name = 69
     data_file = "../data/hour/%s.csv" % station_name
     time_steps = 16
     model_file = "../checkpoints/hour/raw/%s.h5" % station_name

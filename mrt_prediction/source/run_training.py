@@ -1,5 +1,6 @@
-from utils.utils import *
-import tensorflow as tf
+from utils.data_processing import *
+from utils.keras_model import *
+from utils.figures import *
 
 
 def main():
